@@ -1,2 +1,2 @@
 # Password-manager
-A python password manager app using cryptography library
+A python password manager CLI app using cryptography library
