@@ -3,6 +3,10 @@ import os
 import base64
 import json
 import argparse
+import pyperclip 
+from getpass import getpass
+import string
+import secrets
 
 def genererCle():
     if not os.path.exists("cle.key"):
@@ -39,7 +43,7 @@ def load():
                 return {}
                 
             data = json.loads(content)
-            return data
+            return data 
     except (json.JSONDecodeError, KeyError) as e:
         print(f"Erreur de lecture du fichier: {str(e)}")
         return {}
@@ -49,41 +53,53 @@ def save(service: str, password: str, id: str):
     data = load()
     data[service] = {
         "identifiant": id,
-        "mdp": cypher(password)  # Stocke directement le résultat chiffré en base64
+        "mdp": cypher(password)  
     }
     
     with open("vault.json", "w") as file:
         json.dump(data, file, indent=4)
 
+def generatePassword(lenght = 16, Special = True):
+    chars = string.ascii_letters + string.digits
+    if Special:
+        chars += "!@#$%^&*"
+    return ''.join(secrets.choice(chars) for _ in range(lenght))
+
+
 def main():
-    parser = argparse.ArgumentParser(description="AES encrypted password manager")
+    parser = argparse.ArgumentParser(description="fernet encrypted password manager")
     parser.add_argument("--add", action="store_true", help="add new password")
     parser.add_argument("--get", type=str, help="get service's password")
     parser.add_argument("--list", action="store_true", help="list all services already entered")
+    
 
     args = parser.parse_args()
 
     if args.add:
-        service = input("Service (Ex:GitHub, Google, etc.) : ")
+        element = input("Service (Ex:GitHub, Google, etc.) : ")
         id = input("Identifier : ")
-        password = input("Password : ")
-        save(service, password, id)
-        print(f"Password for {service} saved!")
+        password = getpass("Password : ")
+        save(element, password, id)
+        print(f"Password for {element} saved!")
     elif args.get:
         data = load()
         if args.get in data:
             print(f"Identifier: {data[args.get]['identifiant']}")
-            print(f"Password: {decipher(data[args.get]['mdp'])}")
+            pyperclip.copy(decipher(data[args.get]['mdp']))
+            print('Password copied in clipboard')
         else:
             print(f"Service '{args.get}' not found!")
     elif args.list:
         services = list(load().keys())
-        print("Saved services:", services if services else "None")
+        data = load()
+        
+        print("Saved services : ")
+        for service in services:
+            print(f" - {service} | id : {data[service]['identifiant']}")
 
 if __name__ == "__main__":
-    # Initialisation sécurisée
+    
     if not os.path.exists("vault.json"):
         with open("vault.json", "w") as f:
             f.write("{}")
-    
-    main()
+    main() 
