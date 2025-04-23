@@ -1,16 +1,16 @@
 import argparse
 from getpass import getpass
 from pathlib import Path
-from core.cryptography import generate_key, initialize_cipher, encrypt, decrypt
-from core.storage import load_vault, save_to_vault
+from core.cryptography import unlock_vault, initialize_vault, encrypt, decrypt
+from core.storage import load_vault, save_vault, create_new_vault
 from utils.passwordGenerator import generate_passphrase
 from utils.clipboard import copy_to_clipboard
 import sys
+from cryptography.fernet import InvalidToken
 
 # Configuration paths
 BASE_DIR = Path(__file__).parent.parent
 DATA_DIR = BASE_DIR / "data"
-KEY_PATH = DATA_DIR / "key.key"
 VAULT_PATH = DATA_DIR / "vault.json"
 
 def ensure_data_dir():
@@ -34,13 +34,36 @@ def validate_service_name(service: str) -> bool:
 def main():
     """Main entry point for the password manager CLI"""
     
-    # Initialize directories and cryptographic components
+    # Initialize directories
     ensure_data_dir()
+    
+    # Check if vault exists
+    if not VAULT_PATH.exists():
+        print("Initializing new password vault...")
+        try:
+            cipher, salt = initialize_vault()
+            create_new_vault(VAULT_PATH, salt)
+            print("Vault created successfully")
+            return
+        except Exception as e:
+            sys.exit(f"Error: {str(e)}")
+    
+    # Load existing vault
     try:
-        key = generate_key(KEY_PATH)
-        cipher = initialize_cipher(key)
+        vault_data = load_vault(VAULT_PATH)
+        salt = bytes.fromhex(vault_data["salt"])
+        cipher = unlock_vault(salt)
+        
+        # Decrypt all entries in memory
+        decrypted_data = vault_data.copy()
+        for service, entry in decrypted_data["entries"].items():
+            if "password" in entry:
+                entry["password"] = decrypt(cipher, entry["password"])
+                
+    except InvalidToken:
+        sys.exit("Error: Incorrect master password")
     except Exception as e:
-        sys.exit(f"Initialization error: {str(e)}")
+        sys.exit(f"Error: {str(e)}")
     
     # Argument parser setup
     parser = argparse.ArgumentParser(
@@ -101,40 +124,37 @@ def main():
                 sys.exit("Error: All fields are required")
             
             # Save to vault
-            data = load_vault(VAULT_PATH)
-            data[service] = {
+            decrypted_data["entries"][service] = {
                 "identifier": identifier,
                 "password": encrypt(cipher, password)
             }
-            save_to_vault(VAULT_PATH, data)
+            save_vault(VAULT_PATH, decrypted_data, cipher)
             print(f"Success: Credentials for '{service}' saved")
 
         # Retrieve password
         elif args.get:
             service = args.get.strip()
-            data = load_vault(VAULT_PATH)
             
-            if service not in data:
+            if service not in decrypted_data["entries"]:
                 sys.exit(f"Error: Service '{service}' not found")
                 
+            entry = decrypted_data["entries"][service]
             print(f"Service: {service}")
-            print(f"Identifier: {data[service]['identifier']}")
-            password = decrypt(cipher, data[service]['password'])
-            if copy_to_clipboard(password):
+            print(f"Identifier: {entry['identifier']}")
+            if copy_to_clipboard(entry["password"]):
                 print("Password copied to clipboard")
             else:
-                print(f"Password: {password}")
+                print(f"Password: {entry['password']}")
 
         # List services
         elif args.list:
-            data = load_vault(VAULT_PATH)
-            if not data:
+            if not decrypted_data["entries"]:
                 print("No services stored")
                 return
                 
             print("Stored services:")
-            for service, details in sorted(data.items()):
-                print(f" - {service:20} : {details['identifier']}")
+            for service, entry in sorted(decrypted_data["entries"].items()):
+                print(f" - {service:20} : {entry['identifier']}")
 
         # Generate passphrase only
         elif args.generate_passphrase is not None:
