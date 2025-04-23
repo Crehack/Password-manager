@@ -2,11 +2,11 @@ import json
 import os
 from pathlib import Path
 from typing import Dict, Any
-from cryptography.fernet import Fernet  # Added missing import
+from cryptography.fernet import Fernet  
 
 VAULT_HEADER = {
     "version": 1,
-    "salt": None,  # Will be populated
+    "salt": None,  
     "entries": {}
 }
 

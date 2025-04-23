@@ -1,12 +1,12 @@
 import argparse
 from getpass import getpass
 from pathlib import Path
-from core.cryptography import unlock_vault, initialize_vault, encrypt, decrypt
-from core.storage import load_vault, save_vault, create_new_vault
-from utils.passwordGenerator import generate_passphrase
-from utils.clipboard import copy_to_clipboard
+import os
 import sys
-from cryptography.fernet import InvalidToken
+from core.cryptography import CryptoManager
+from core.storage import load_vault, save_vault, create_new_vault
+from utils.clipboard import copy_to_clipboard
+from utils.passwordGenerator import generate_passphrase
 
 # Configuration paths
 BASE_DIR = Path(__file__).parent.parent
@@ -31,7 +31,7 @@ def validate_service_name(service: str) -> bool:
         print("Warning: Spaces in service names may cause issues")
     return 2 <= len(service) <= 50 and all(c.isalnum() or c in " -_" for c in service)
 
-def main():
+def cli_main():
     """Main entry point for the password manager CLI"""
     
     # Initialize directories
@@ -41,7 +41,7 @@ def main():
     if not VAULT_PATH.exists():
         print("Initializing new password vault...")
         try:
-            cipher, salt = initialize_vault()
+            cipher, salt = CryptoManager.initialize_vault()
             create_new_vault(VAULT_PATH, salt)
             print("Vault created successfully")
             return
@@ -52,26 +52,23 @@ def main():
     try:
         vault_data = load_vault(VAULT_PATH)
         salt = bytes.fromhex(vault_data["salt"])
-        cipher = unlock_vault(salt)
+        cipher = CryptoManager.unlock_vault(salt)
         
-        # Decrypt all entries in memory
+       
         decrypted_data = vault_data.copy()
         for service, entry in decrypted_data["entries"].items():
             if "password" in entry:
-                entry["password"] = decrypt(cipher, entry["password"])
+                entry["password"] = CryptoManager.decrypt(cipher, entry["password"])
                 
-    except InvalidToken:
-        sys.exit("Error: Incorrect master password")
     except Exception as e:
         sys.exit(f"Error: {str(e)}")
-    
-    # Argument parser setup
+
+    # Parse command line arguments
     parser = argparse.ArgumentParser(
         description="Secure password manager using Fernet encryption",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter  
     )
     
-    # Main command group (mutually exclusive)
     main_group = parser.add_mutually_exclusive_group()
     main_group.add_argument("--add", "-a", 
                           action="store_true", 
@@ -110,7 +107,7 @@ def main():
 
             # Handle password generation or input
             if args.generate_passphrase is not None:
-                num_words = max(3, min(args.generate_passphrase, 6))  # Limit 3-6 words
+                num_words = max(3, args.generate_passphrase)  # Limit 3-6 words
                 password = generate_passphrase(
                     num_words=num_words,
                     wordlist_path=args.wordlist
@@ -126,7 +123,7 @@ def main():
             # Save to vault
             decrypted_data["entries"][service] = {
                 "identifier": identifier,
-                "password": encrypt(cipher, password)
+                "password": CryptoManager.encrypt(cipher, password)
             }
             save_vault(VAULT_PATH, decrypted_data, cipher)
             print(f"Success: Credentials for '{service}' saved")
@@ -158,7 +155,7 @@ def main():
 
         # Generate passphrase only
         elif args.generate_passphrase is not None:
-            num_words = max(3, min(args.generate_passphrase, 6))
+            num_words = max(3, args.generate_passphrase)
             try:
                 passphrase = generate_passphrase(
                     num_words=num_words,
@@ -184,4 +181,4 @@ def main():
         sys.exit(f"Error: {str(e)}")
 
 if __name__ == "__main__":
-    main()
+    cli_main()
