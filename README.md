@@ -24,4 +24,14 @@ Un gestionnaire de mots de passe sécurisé avec chiffrement Fernet, disponible 
 
 2. **Installer les dependances** :
     ```bash
-    pip install -r requirement.txt```
+    pip install -r requirement.txt
+
+3. **Lancer** :
+  1. **Lancer la GUI**
+      ```bash
+      python3 main.py
+  2. **Lancer le CLI
+     ```bash
+     python3.py main.py [args]
+
+  --help pour l'aide
