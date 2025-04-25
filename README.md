@@ -30,7 +30,7 @@ Un gestionnaire de mots de passe sécurisé avec chiffrement Fernet, disponible 
   1. **Lancer la GUI**
       ```bash
       python3 main.py
-  2. **Lancer le CLI
+  2. **Lancer le CLI**
      ```bash
      python3.py main.py [args]
 
